@@ -487,6 +487,8 @@ void FlaskCpp::run() {
     serverAddr.sin6_addr = in6addr_any;
     serverAddr.sin6_port = htons(port);
 
+    bind_success = false;
+
     if (bind(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == -1) {
         if (logger)
         {
@@ -497,7 +499,8 @@ void FlaskCpp::run() {
         else
             std::cerr << "[\033[32m" << strfnowtime() << "\033[0m] " << "Bind failed." << std::endl;
         close(serverSocket);
-        running.store(false);
+        // running.store(false);
+        // stop();
         return;
     }
 
@@ -511,9 +514,12 @@ void FlaskCpp::run() {
         else
             std::cerr << "[\033[32m" << strfnowtime() << "\033[0m] " << "Listen failed." << std::endl;
         close(serverSocket);
-        running.store(false);
+        // running.store(false);
+        // stop();
         return;
     }
+
+    bind_success = true;
 
     if (logger)
     {
@@ -625,8 +631,14 @@ void FlaskCpp::runAsync(int port, bool verbose, bool enableHotReload)
     this->runAsync();
 }
 
+bool FlaskCpp::isRunning()
+{
+    return running && bind_success;
+}
 
 void FlaskCpp::stop() {
+    if (!running.load() && bind_success) return;
+
     if (logger)
     {
         std::ostringstream oss;
@@ -636,8 +648,6 @@ void FlaskCpp::stop() {
     else if (verbose) std::cout << "[\033[32m" << strfnowtime() << "\033[0m] " << "(\033[36m" << server_name << "\033[0m) " 
     << "please wait for http server stop" << std::endl;
     
-    if (!running.load()) return;
-
     // std::cout << __LINE__ << std::endl;
     running.store(false);
 
