@@ -130,6 +130,8 @@ public:
 #endif
 
     void setSecretKey(const std::string& key);
+
+    bool isRunning();
     
 private:
     size_t check_duration=500;
@@ -145,7 +147,7 @@ private:
 
     loggerWrite logger=nullptr;
 
-    
+    std::atomic<bool> bind_success = false;
 
     TemplateEngine::FileChangedCallback template_changed_callback=nullptr;
 
