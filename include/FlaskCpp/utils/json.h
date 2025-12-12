@@ -32,13 +32,18 @@ public:
             i++;
         }
         oss << "]";
-        if (key.size()) json_data[key] = oss.str();
+        if (key.size()) 
+        {
+            json_data[key] = oss.str();
+            isBool[key] = false;
+        }
         return oss.str();
     }
 
     std::string add(std::string key, bool value)
     {
         if (key.size()) json_data[key] = std::string(value?"true":"false");
+        isBool[key] = true;
         return std::string(value?"true":"false");
     }
 
@@ -49,7 +54,11 @@ public:
         //     std::cerr << "can not add self!" << std::endl;
         //     return json.toString();
         // }
-        if (key.size()) json_data[key] = json.toString();
+        if (key.size()) 
+        {
+            json_data[key] = json.toString();
+            isBool[key] = false;
+        }
         return json.toString();
     }
 
@@ -60,7 +69,11 @@ public:
         oss << std::fixed << std::setprecision(this->precision);
         oss << value;
         std::string v = oss.str();
-        if (key.size()) json_data[key] = v;
+        if (key.size()) 
+        {
+            json_data[key] = v;
+            isBool[key] = false;
+        }
         return v;
     }
 
@@ -73,7 +86,7 @@ public:
         {
             if (i) oss << ",";
             auto sec = pair.second;
-            if (!isNumber(sec)) sec = std::string("\"") + sec + "\"";
+            if (!isNumber(sec)) if(!isBool[pair.first]) sec = std::string("\"") + sec + "\"";
             oss << "\"" << pair.first << "\":" << sec;
             i++;
         }
@@ -98,6 +111,7 @@ public:
 
 private:
     std::unordered_map<std::string, std::string> json_data;
+    std::unordered_map<std::string, bool> isBool;
     int precision=8;
 
 
