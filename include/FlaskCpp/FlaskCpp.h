@@ -147,7 +147,7 @@ private:
 
     loggerWrite logger=nullptr;
 
-    std::atomic<bool> bind_success = false;
+    std::atomic<bool> bind_success = true;
 
     TemplateEngine::FileChangedCallback template_changed_callback=nullptr;
 
