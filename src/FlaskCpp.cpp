@@ -487,7 +487,7 @@ void FlaskCpp::run() {
     serverAddr.sin6_addr = in6addr_any;
     serverAddr.sin6_port = htons(port);
 
-    bind_success = false;
+    bind_success = true;
 
     if (bind(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == -1) {
         if (logger)
@@ -499,6 +499,7 @@ void FlaskCpp::run() {
         else
             std::cerr << "[\033[32m" << strfnowtime() << "\033[0m] " << "Bind failed." << std::endl;
         close(serverSocket);
+        bind_success = false;
         // running.store(false);
         // stop();
         return;
@@ -514,12 +515,11 @@ void FlaskCpp::run() {
         else
             std::cerr << "[\033[32m" << strfnowtime() << "\033[0m] " << "Listen failed." << std::endl;
         close(serverSocket);
+        bind_success = false;
         // running.store(false);
         // stop();
         return;
     }
-
-    bind_success = true;
 
     if (logger)
     {
