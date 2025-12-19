@@ -75,11 +75,11 @@ Response send_text(std::string text,
     resp.type = RESP_TYPE_TEXT;
     std::string content_type = getFileTypeString(FLASK_FILE_TEXT_PLAIN, "");
 
-    if (text.find("<!DOCTYPE html>") == 0 || (text.find("<head>") != text.npos && 
+    if (text.find("<!DOCTYPE html>") < 2 || (text.find("<head") != text.npos && 
                                               text.find("</head>")!= text.npos && 
-                                              text.find("<body>") != text.npos && 
+                                              text.find("<body") != text.npos && 
                                               text.find("</body>") != text.npos &&
-                                              text.find("<html>") != text.npos && 
+                                              text.find("<html") != text.npos && 
                                               text.find("</html>") != text.npos))
     {
         content_type = getFileTypeString(FLASK_FILE_TEXT_HTML, "");
@@ -159,7 +159,7 @@ Response send_file(std::string file_path, std::string file_name, bool as_attachm
 }
 
 template <typename T>
-Response send_file_data(std::vector<T> data, std::string file_name, bool as_attachment, 
+Response send_file_data(std::vector<T>& data, std::string file_name, bool as_attachment, 
                         std::vector<std::pair<std::string, std::string>> extra_headers)
 {
     Response resp;
@@ -180,15 +180,15 @@ Response send_file_data(std::vector<T> data, std::string file_name, bool as_atta
 }
 
 template Response send_file_data<char>(
-    std::vector<char>, std::string, bool, 
+    std::vector<char>&, std::string, bool, 
     std::vector<std::pair<std::string, std::string>>);
 
 template Response send_file_data<uint8_t>(
-    std::vector<uint8_t>, std::string, bool, 
+    std::vector<uint8_t>&, std::string, bool, 
     std::vector<std::pair<std::string, std::string>>);
 
 template Response send_file_data<int8_t>(
-    std::vector<int8_t>, std::string, bool, 
+    std::vector<int8_t>&, std::string, bool, 
     std::vector<std::pair<std::string, std::string>>);
 
 

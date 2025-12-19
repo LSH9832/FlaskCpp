@@ -18,6 +18,7 @@ const std::string LOGO =  R"( _____ _           _       ____
 |  _| | | (_| \__ \   <  | |___| |_) | |_) |
 |_|   |_|\__,_|___/_|\_\  \____| .__/| .__/ 
                                |_|   |_|)";
+const std::string FLASK_AUTHORS = R"(LSH9832 & Andrew-Gomonov)";
 
 const std::string FLASK_COMPILE_TIME = __DATE__ + std::string(" ") + __TIME__;
 std::atomic<bool> flask_first = true;
@@ -128,6 +129,7 @@ FlaskCpp::FlaskCpp(std::string server_name, size_t minThreads, size_t maxThreads
         std::cout << "\033[33m\033[1m" << LOGO << "\033[0m" << std::endl;
         std::cout << "FlaskCpp Compile Time: \033[35m\033[1m" 
                   << FLASK_COMPILE_TIME << "\033[0m" << std::endl;
+        std::cout << "FlaskCpp Authors:\033[36m\033[1m " << FLASK_AUTHORS << "\033[0m" << std::endl;
     }
 }
 
@@ -141,6 +143,7 @@ FlaskCpp::FlaskCpp(int port, bool verbose, bool enableHotReload, size_t minThrea
             std::cout << LOGO << std::endl;
             std::cout << "FlaskCpp Compile Time: \033[35m\033[1m" 
                     << FLASK_COMPILE_TIME << "\033[0m" << std::endl;
+            std::cout << "FlaskCpp Authors:\033[36m\033[1m " << FLASK_AUTHORS << "\033[0m" << std::endl;
         }
     }
 }

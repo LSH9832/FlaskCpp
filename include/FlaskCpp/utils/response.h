@@ -142,7 +142,7 @@ Response send_file(std::string file_path, std::string file_name, bool as_attachm
                    std::vector<std::pair<std::string, std::string>> extra_headers={});
 
 template <typename T>
-Response send_file_data(std::vector<T> data, std::string file_name, bool as_attachment=false, 
+Response send_file_data(std::vector<T>& data, std::string file_name, bool as_attachment=false, 
                         std::vector<std::pair<std::string, std::string>> extra_headers={});
 
 }

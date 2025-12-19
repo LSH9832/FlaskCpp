@@ -105,19 +105,29 @@ void ThreadPool::monitorLoad()
 // Метод остановки пула потоков
 void ThreadPool::shutdown()
 {
-    bool expected = false;
-    if(stop.compare_exchange_strong(expected, true)) {
-        condition.notify_all();
-        // std::cout << "num workers: " << workers.size() << std::endl;
-        for(std::thread &worker: workers)
-            if(worker.joinable())
-                worker.join();
-        if(monitorThread.joinable())
-            monitorThread.join();
-        if (verbose) {
-            std::cout << "ThreadPool: all stopped." << std::endl;
+    try
+    {
+        bool expected = false;
+        if(stop.compare_exchange_strong(expected, true)) {
+            condition.notify_all();
+            // std::cout << "num workers: " << workers.size() << std::endl;
+            for(std::thread &worker: workers)
+                if(worker.joinable())
+                    worker.join();
+            // std::cout << "stop monitor thread" << std::endl;
+            if(monitorThread.joinable())
+                monitorThread.join();
+            if (verbose) {
+                std::cout << "ThreadPool: all stopped." << std::endl;
+            }
         }
     }
+    catch(const std::exception& e)
+    {
+        std::cerr << e.what() << '\n';
+    }
+    
+    
 }
 
 size_t ThreadPool::getMinThreads()
