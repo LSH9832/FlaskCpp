@@ -607,11 +607,11 @@ void FlaskCpp::run() {
         char clientIP[INET6_ADDRSTRLEN];
         inet_ntop(AF_INET6, &clientAddr.sin6_addr, clientIP, INET6_ADDRSTRLEN);
 
-        bool fromIPV6 = stringStartsWith(clientIP, "::ffff:");
+        bool fromIPV4 = stringStartsWith(clientIP, "::ffff:");
 
         // 将客户端处理添加到具有特定优先级的线程池
-        threadPool.enqueue(priority, [this, clientSocket, clientIP, fromIPV6]() {
-            this->handleClient(clientSocket, std::string(fromIPV6?clientIP+7:clientIP));
+        threadPool.enqueue(priority, [this, clientSocket, clientIP, fromIPV4]() {
+            this->handleClient(clientSocket, std::string(fromIPV4?clientIP+7:clientIP));
         });
     }
 
