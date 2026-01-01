@@ -39,17 +39,17 @@ using namespace std;
 atomic<bool> globalRunning(true);
 
 void signalHandler(int signum) {
-    std::cout << "\nInterrupt signal (" << signum << ") received.\n";
+    cout << "\nInterrupt signal (" << signum << ") received.\n";
     globalRunning = false;
 }
 
 int main(int argc, char** argv)
 {
-    std::signal(SIGINT, signalHandler);
-    std::signal(SIGTERM, signalHandler);
+    signal(SIGINT, signalHandler);
+    signal(SIGTERM, signalHandler);
     if (argc < 2)
     {
-        cout << "usage: " << argv[0] << " PORT" << endl;
+        cout << "usage: " << argv[0] << " PORT\n";
     }
     int port = std::atoi(argv[1]);
 
@@ -64,9 +64,9 @@ int main(int argc, char** argv)
         return flaskcpp::send_text("Hello FlaskCpp!");
     });
 
-    std::string ROOT = "/Path/to/your/file/service";
+    string ROOT = "/Path/to/your/file/service";
     app.route2("/files/<path:file_path>", [&](const RequestData& req) {
-        std::string path = ROOT + "/" + req.routeParams.at("file_path");
+        string path = ROOT + "/" + req.routeParams.at("file_path");
         if (/* !os.path.isfile(path) */)
         {
             return flaskcpp::send_error(
