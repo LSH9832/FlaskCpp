@@ -23,7 +23,7 @@ cmake ..
 cmake --build . --config Release
 # linux
 make -j$(nproc)
-# then generate libFlaskCpp.so
+# then generate `libFlaskCpp.so` or `FlaskCpp.dll`
 ```
 
 ### 2.2 Use FlaskCpp in your project!
