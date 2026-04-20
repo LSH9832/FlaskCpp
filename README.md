@@ -1,6 +1,10 @@
 # FlaskCpp: 高效、轻量化的网页服务框架
 
-<center>[English](/README-EN.md)</center>
+<div align="center">
+
+[English](/README-EN.md)
+
+</div>
 
 ## 0. 致谢
 
