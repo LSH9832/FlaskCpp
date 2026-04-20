@@ -8,7 +8,7 @@
 
 ## 0. 致谢
 
-感谢 FlaskCpp 原作者[Andrew-Gomonov](https://github.com/Andrew-Gomonov)! 原项目仓库请见 [Andrew-Gomonov/FlaskCpp](https://github.com/Andrew-Gomonov/FlaskCpp), and I make it easier to use.
+感谢 FlaskCpp 原作者[Andrew-Gomonov](https://github.com/Andrew-Gomonov)! 原项目仓库请见 [Andrew-Gomonov/FlaskCpp](https://github.com/Andrew-Gomonov/FlaskCpp).
 
 ## 1. 更新内容
 - **支持在Windows系统上使用**.
