@@ -3,26 +3,31 @@ cmake_minimum_required(VERSION 3.10)
 project(FlaskCpp LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
+# set(CMAKE_BUILD_TYPE Release) # Debug
+if(WIN32)
+set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+else()
 set(CMAKE_CXX_FLAGS "-O3 -fPIC -pthread -w ${CMAKE_CXX_FLAGS}")
-set(CMAKE_BUILD_TYPE Release) # Debug
-
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/install/bin/")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/install/lib/")
-
+endif()
 
 include_directories(
-    ./include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
-
 
 add_library(FlaskCpp SHARED
-    src/FlaskCpp.cpp
-    src/TemplateEngine.cpp
-    src/ThreadPool.cpp
-    src/FlaskTypes.cpp
-    src/utils/file.cpp
-    src/utils/response.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/FlaskCpp.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/TemplateEngine.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/ThreadPool.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/FlaskTypes.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/utils/file.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/utils/response.cpp
 )
+
+if(WIN32)
+target_link_libraries(FlaskCpp
+    ws2_32
+)
+endif()
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/src/demo)
 
