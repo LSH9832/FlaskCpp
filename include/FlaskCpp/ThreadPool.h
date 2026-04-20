@@ -60,6 +60,8 @@ public:
 
     size_t getMaxThreads();
 
+    size_t getCurrentThreads() {return currentThreads;}
+
 private:
     // Рабочие потоки
     std::vector<std::thread> workers;

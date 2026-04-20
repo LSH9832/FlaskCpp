@@ -34,10 +34,12 @@ public:
 
     void addCheckTask(CheckTask task);
 
-    // 执行所有检查任务
     void execAllCheckTask();
 
     void checkConfigOnce();
+
+    // Рендер всего шаблона: обрабатываем extends, comments, include, if, for и переменные
+    std::string renderTemplateContent(const std::string& content, const Context& context) const;
 
 private:
     size_t duration=500;
@@ -51,9 +53,6 @@ private:
     std::vector<CheckTask> checkTasks;
 
     std::string getTemplateContent(const std::string& name) const;
-
-    // Рендер всего шаблона: обрабатываем extends, comments, include, if, for и переменные
-    std::string renderTemplateContent(const std::string& content, const Context& context) const;
 
     // Вспомогательные функции
     bool evaluateCondition(const std::string& varName, const Context& context) const;

@@ -13,10 +13,18 @@
 #include <map>
 #include <filesystem>
 #include <fstream>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#include <windows.h>
+#else
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#endif
+
+
 #include <cstring>
 #include <thread>
 #include <mutex>
@@ -26,6 +34,7 @@
 #include <array>
 // #include <pair>
 #include "./utils/parse/json.hpp"
+#include "ClientData.h"
 
 // Структура для хранения данных запроса
 struct RequestData {
@@ -48,6 +57,10 @@ struct RequestData {
     std::map<std::string, File> files;
     std::map<std::string, std::string> cookies; // Хранит парсенные cookies
     std::map<std::string, std::string> session;
+
+    bool isFromData=false;
+    ClientData* __client_data=nullptr;
+    std::function<void()> acceptForm;
 };
 
 enum FlaskFileType
@@ -98,5 +111,6 @@ std::string getFileTypeString(int type=-1, std::string filename="");
 
 int getContentTypeByString(const std::string& content_type);
 
+bool isFormReq(RequestData& req);
 
 #endif

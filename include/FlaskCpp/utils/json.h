@@ -9,6 +9,7 @@
 // #include <ostream>
 #include <regex>
 #include <unordered_map>
+#include <map>
 
 namespace flaskcpp
 {
@@ -36,6 +37,7 @@ public:
         {
             json_data[key] = oss.str();
             isBool[key] = false;
+            isJson[key] = false;
         }
         return oss.str();
     }
@@ -44,6 +46,7 @@ public:
     {
         if (key.size()) json_data[key] = std::string(value?"true":"false");
         isBool[key] = true;
+        isJson[key] = false;
         return std::string(value?"true":"false");
     }
 
@@ -58,6 +61,7 @@ public:
         {
             json_data[key] = json.toString();
             isBool[key] = false;
+            isJson[key] = true;
         }
         return json.toString();
     }
@@ -73,6 +77,7 @@ public:
         {
             json_data[key] = v;
             isBool[key] = false;
+            isJson[key] = false;
         }
         return v;
     }
@@ -86,7 +91,7 @@ public:
         {
             if (i) oss << ",";
             auto sec = pair.second;
-            if (!isNumber(sec)) if(!isBool[pair.first]) sec = std::string("\"") + sec + "\"";
+            if (!isNumber(sec)) if(!isBool[pair.first] && !isJson[pair.first]) sec = std::string("\"") + sec + "\"";
             oss << "\"" << pair.first << "\":" << sec;
             i++;
         }
@@ -111,7 +116,7 @@ public:
 
 private:
     std::unordered_map<std::string, std::string> json_data;
-    std::unordered_map<std::string, bool> isBool;
+    std::unordered_map<std::string, bool> isBool, isJson;
     int precision=8;
 
 

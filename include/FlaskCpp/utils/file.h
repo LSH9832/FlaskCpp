@@ -5,6 +5,7 @@
 #include <fstream>
 #include <vector>
 #include <FlaskCpp/FlaskTypes.h>
+#include "../ClientData.h"
 
 namespace flaskcpp
 {

@@ -13,62 +13,89 @@
 
 class URLSafeSerializer {
 private:
-    std::string secret_key="FlaskCppURLSafeSerializer";
+    std::string secret_key;
     
-    const std::string base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    // Base64 URL安全字符表
+    const std::string base64_chars = 
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz"
+        "0123456789"
+        "-_";
     
+    // HMAC-SHA1实现
     std::string hmac_sha1(const std::string& data) const {
+        // 块大小（字节）
         const size_t block_size = 64;
         
+        // 密钥预处理
         std::string key = secret_key;
         if (key.length() > block_size) {
+            // 如果密钥太长，先进行哈希（这里简化处理）
             key = key.substr(0, block_size);
         }
         if (key.length() < block_size) {
             key.append(block_size - key.length(), '\0');
         }
         
+        // 创建ipad和opad
         std::string ipad(block_size, 0x36);
         std::string opad(block_size, 0x5C);
         
+        // 密钥与ipad/opad异或
         std::string i_key_pad, o_key_pad;
         for (size_t i = 0; i < block_size; ++i) {
             i_key_pad.push_back(key[i] ^ ipad[i]);
             o_key_pad.push_back(key[i] ^ opad[i]);
         }
         
+        // 内部哈希：hash(i_key_pad + message)
         std::string inner_hash_data = i_key_pad + data;
         std::string inner_hash = sha1_hash(inner_hash_data);
         
+        // 外部哈希：hash(o_key_pad + inner_hash)
         std::string outer_hash_data = o_key_pad + inner_hash;
         std::string outer_hash = sha1_hash(outer_hash_data);
         
         return outer_hash;
     }
     
+    // SHA1哈希函数简化实现
     std::string sha1_hash(const std::string& data) const {
+        // 初始化哈希值
         uint32_t h0 = 0x67452301;
         uint32_t h1 = 0xEFCDAB89;
         uint32_t h2 = 0x98BADCFE;
         uint32_t h3 = 0x10325476;
         uint32_t h4 = 0xC3D2E1F0;
 
+        
+        
+        // 预处理：填充数据
         std::string padded_data = data;
         padded_data.push_back(static_cast<char>(0x80));
+
         
+        
+        // 填充0直到长度 ≡ 448 (mod 512)
         while ((padded_data.size() * 8) % 512 != 448) {
             padded_data.push_back('\0');
         }
 
+        
+        
+        // 附加原始数据长度（64位）
         uint64_t original_bit_length = data.size() * 8;
         for (int i = 7; i >= 0; --i) {
             padded_data.push_back(static_cast<char>((original_bit_length >> (8 * i)) & 0xFF));
         }
 
-
+        
+        
+        // 处理512位块
         for (size_t i = 0; i < padded_data.size(); i += 64) {
             std::vector<uint32_t> w(80, 0);
             
+            // 将块分解为16个32位字
             for (size_t j = 0; j < 16; ++j) {
                 w[j] = (static_cast<uint32_t>(padded_data[i + j * 4]) << 24) |
                          (static_cast<uint32_t>(padded_data[i + j * 4 + 1]) << 16) |
@@ -76,12 +103,15 @@ private:
                          (static_cast<uint32_t>(padded_data[i + j * 4 + 3]));
             }
             
+            // 扩展16个字为80个字
             for (size_t j = 16; j < 80; ++j) {
                 w[j] = left_rotate(w[j-3] ^ w[j-8] ^ w[j-14] ^ w[j-16], 1);
             }
             
+            // 初始化工作变量
             uint32_t a = h0, b = h1, c = h2, d = h3, e = h4;
             
+            // 主循环
             for (size_t j = 0; j < 80; ++j) {
                 uint32_t f, k;
                 
@@ -107,6 +137,7 @@ private:
                 a = temp;
             }
             
+            // 添加到当前哈希值
             h0 += a;
             h1 += b;
             h2 += c;
@@ -114,6 +145,9 @@ private:
             h4 += e;
         }
         
+        
+
+        // 转换为字节字符串
         std::string result;
         for (auto val : {h0, h1, h2, h3, h4}) {
             for (int i = 3; i >= 0; --i) {
@@ -121,9 +155,12 @@ private:
             }
         }
 
+        
+            
         return result;
     }
     
+    // 左旋转函数
     uint32_t left_rotate(uint32_t value, size_t count) const {
         return (value << count) | (value >> (32 - count));
     }
@@ -179,7 +216,7 @@ private:
         // std::cout << "encode_size: " << data.size() << std::endl;
         return ret;
     }
-
+    // Base64 URL安全解码
     std::string base64_decode(const std::string& encoded) {
         std::string ret;
         int i = 0;
@@ -284,9 +321,13 @@ public:
         }
     }
 
+    
+    // 序列化并签名数据
     std::string dumps(const std::string& data) {
+        // 生成签名
         std::string signature = hmac_sha1(data);
         
+        // 组合数据和签名
         std::ostringstream oss;
         oss << base64_encode(data) << "." << base64_encode(signature);
 
@@ -304,7 +345,9 @@ public:
         return oss.str();
     }
     
+    // 验证签名并反序列化数据
     std::string loads(const std::string& signed_data) {
+        // 分离数据和签名
         size_t dot_pos = signed_data.find_last_of('.');
         if (dot_pos == std::string::npos) {
             // std::cout << payload << std::endl;
@@ -314,8 +357,12 @@ public:
         std::string data_part = base64_decode(signed_data.substr(0, dot_pos));
         std::string signature_part = base64_decode(signed_data.substr(dot_pos + 1));
 
+
+        
+        // 验证签名
         std::string expected_signature = hmac_sha1(data_part);
         
+        // std::cout << "验证签名" << std::endl;
         // std::ostringstream oss_s;
         // for(auto&c: data_part)
         // {
@@ -335,7 +382,22 @@ public:
             return "";
         }
         
+        // 反序列化数据
         return data_part;
     }
 };
 
+// std::string main() {
+//     URLSafeSerializer serializer("secret-key");
+//     std::string signed_data = serializer.dumps("123");
+//     std::string result = "序列化结果: " + signed_data;
+    
+//     try {
+//         std::string deserialized_data = serializer.loads(signed_data);
+//         result += ", 反序列化结果: " + deserialized_data;
+//     } catch (const std::exception& e) {
+//         result += ", 错误: " + std::string(e.what());
+//     }
+    
+//     return result;
+// }

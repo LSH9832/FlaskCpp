@@ -10,12 +10,21 @@
 #include "./utils/log.h"
 #include "./utils/urlSafeSerializer.h"
 
+#define FLASKDEBUG(app, msg) app->log({0, (msg), __LINE__, __FILE__, __func__})
+#define FLASKINFO(app, msg) app->log({1, (msg), __LINE__, __FILE__, __func__})
+#define FLASKSUCCESS(app, msg) app->log({2, (msg), __LINE__, __FILE__, __func__})
+#define FLASKWARN(app, msg) app->log({3, (msg), __LINE__, __FILE__, __func__})
+#define FLASKERROR(app, msg) app->log({4, (msg), __LINE__, __FILE__, __func__})
+#define FLASKCRITICAL(app, msg) app->log({5, (msg), __LINE__, __FILE__, __func__})
+
 
 #define FLASK_EMPTY_EXTRA_HEADER {"", ""}
 #define FLASK_SET_COOKIES(cookies, time) {"Set-Cookie", parse_cookies( ( cookies ) , ( time ) )}
 #define FLASK_NO_CACHE {"Cache-Control", "no-cache"}
 #define FLASK_CACHE_TIME(t) {"Cache-Control", "public, max-age=" + std::to_string(t) + "\r\n"}
 #define FLASK_DELETE_SESSION {"Set-Cookie", "session=deleted;Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly"}
+
+
 
 // Типы хендлеров маршрутов
 
@@ -37,7 +46,6 @@ public:
 
     FlaskCpp(std::string server_name, size_t minThreads=2, size_t maxThreads=128);
 
-    // 更新后的构造函数，为线程池增加了额外参数， deprecated
     FlaskCpp(int port, bool verbose = false, bool enableHotReload = true, size_t minThreads = 2, size_t maxThreads = 8);
 
     void setTemplate(const std::string& name, const std::string& content);
@@ -52,36 +60,33 @@ public:
 
     void addCheckTask(TemplateEngine::CheckTask task);
 
-    void log(const flaskcpp::LogMsg& msg);
+    void log(const flaskcpp::LogMsg& msg, bool simple=false);
 
     void route2(const std::string& path, UniteHandler handler);
 
-    // 添加无参数路由, deprecated
     void route(const std::string& path, SimpleHandler handler) [[deprecated]];
 
     void setLog(loggerWrite w);
 
     void routeFile(const std::string& path, FlaskFileHandler handler) [[deprecated]];
 
-    // 添加带有参数的路由，例如：/user/<id>
     void routeParam(const std::string& pattern, ComplexHandler handler) [[deprecated]];
 
-    // 从目录加载模板
     void loadTemplatesFromDirectory(const std::string& directoryPath);
 
-    // 在单独线程中启动服务器
     void runAsync();
 
     void runAsync(int port, bool verbose=false, bool enableHotReload=true);
 
-    // 启动服务
     void run();
 
     void run(int port, bool verbose=false, bool enableHotReload=true);
 
-    void stop(); // 停止服务
+    void stop();
 
     std::string renderTemplate(const std::string& templateName, const TemplateEngine::Context& context);
+
+    std::string renderTemplateString(const std::string& template_content, const TemplateEngine::Context& context);
 
     template <typename T>
     std::string send_file(std::vector<T> file_data, std::string file_name="", bool as_attachment=false,
@@ -90,8 +95,6 @@ public:
     std::string send_file(std::string file_path, std::string file_name="", bool as_attachment=false,
                           const std::vector<std::pair<std::string, std::string>>& extra_headers = {});
 
-    // 用于生成HTTP响应的辅助函数
-    // 现在接受标题对的向量以支持具有相同名称的多个标题
     std::string buildResponse(const std::string& status_code,
                               const std::string& content_type,
                               const std::string& body,
@@ -106,14 +109,12 @@ public:
     std::string buildResponse(const std::string& status_code,
                               int file_type, std::string file_path,
                               const std::vector<std::pair<std::string, std::string>>& extra_headers = {});
-    // 用于管理Cookie的函数
 
-    // 设置cookie：返回Set-Cookie头部字符串
     std::string setCookie(const std::string& name, const std::string& value,
                           const std::string& path = "/", const std::string& expires = "",
                           bool httpOnly = true, bool secure = false, const std::string& sameSite = "Lax");
 
-    // 删除cookie：返回Set-Cookie头部字符串以删除cookie
+
     std::string deleteCookie(const std::string& name,
                              const std::string& path = "/");
 
@@ -123,9 +124,9 @@ public:
     std::vector<std::string> getAllTemplateNames();
 
     std::string jump_to(const std::string& route_, const std::string& message="", size_t delay=0);
+    std::string jump2(const std::string& route_);
 
 #ifdef ENABLE_PHP
-    // 通过 php-cgi 支持 PHP 的附加功能
     std::string executePHP(const RequestData& reqData, const std::filesystem::path& scriptPath);
 #endif
 
@@ -178,10 +179,11 @@ private:
 
 
     std::mutex routeMutex;
-
+    void handleClient2(int clientSocket, const std::string& clientIP);
     void handleClient(int clientSocket, const std::string& clientIP);
     std::string readRequest(int clientSocket);
     void parseRequest(const std::string& request, RequestData& reqData);
+    void parseRequest2(ClientData& client_data, RequestData& reqData);
     void parseQueryString(const std::string& queryString, std::map<std::string, std::string>& queryParams);
     bool matchParamRoute(const std::string& path, const std::string& pattern, std::map<std::string,std::string>& routeParams);
     bool serveStaticFile(const RequestData& reqData, std::string& response);
