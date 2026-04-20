@@ -6,6 +6,8 @@
 
 </div>
 
+<img width="971" height="594" alt="image" src="https://github.com/user-attachments/assets/335b310d-afdb-497b-ba37-dbf5e80c512a" />
+
 ## 0. 致谢
 
 感谢 FlaskCpp 原作者[Andrew-Gomonov](https://github.com/Andrew-Gomonov)! 原项目仓库请见 [Andrew-Gomonov/FlaskCpp](https://github.com/Andrew-Gomonov/FlaskCpp).
