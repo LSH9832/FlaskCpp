@@ -1,9 +1,22 @@
 #include "FlaskCpp/FlaskCpp.h"
+#include "FlaskCpp/ClientData.h"
 #include <cstdlib>
 #include <csignal>
 #include <thread>
 #include <atomic>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#include <WS2tcpip.h>
+#include <BaseTsd.h>
+    typedef SSIZE_T ssize_t;
+#ifndef MSG_NOSIGNAL
+#define MSG_NOSIGNAL 0
+#endif
+#else
 #include <sys/select.h>
+#endif
+
 #include <fcntl.h>
 
 #include <chrono>
@@ -23,6 +36,45 @@ const std::string FLASK_AUTHORS = R"(LSH9832 & Andrew-Gomonov)";
 const std::string FLASK_COMPILE_TIME = __DATE__ + std::string(" ") + __TIME__;
 std::atomic<bool> flask_first = true;
 std::atomic<bool> verbose_default = true;
+
+
+const std::vector<std::string> log_colors = {
+    "\033[34m",
+    "\033[37m",
+    "\033[1m\033[32m",
+    "\033[1m\033[33m",
+    "\033[1m\033[31m",
+    "\033[1m\033[31;43m"
+};
+
+const std::vector<std::string> log_levelnames = {
+    "DEBUG", 
+    "INFO", 
+    "SUCCESS", 
+    "WARNING", 
+    "ERROR", 
+    "CRITICAL"
+};
+
+
+
+
+
+#ifdef _WIN32
+std::atomic<bool> winsock_init(false);
+WSADATA wsaData;
+void initSocketWindows() {
+    if (!winsock_init)
+    {
+        if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+            std::cerr << "WSAStartup failed." << std::endl;
+            return;
+        }
+        winsock_init = true;
+    }
+}
+#endif
+
 
 void flaskSetDefaultVerbose(bool flag)
 {
@@ -56,22 +108,6 @@ static inline std::string url_decode(const std::string& encoded_str) {
     return decoded_str;
 }
 
-static inline bool stringStartsWith(std::string str_, const std::string prefix)
-{
-    size_t str_len = str_.length();
-    size_t prefix_len = prefix.length();
-    if (prefix_len > str_len) return false;
-    return str_.find(prefix) == 0;
-}
-
-static inline bool stringEndsWith(std::string str_, const std::string suffix)
-{
-    size_t str_len = str_.length();
-    size_t suffix_len = suffix.length();
-    if (suffix_len > str_len) return false;
-    return (str_.find(suffix, str_len - suffix_len) == (str_len - suffix_len));
-}
-
 std::string strfnowtime(std::string format="%Y-%m-%d %H:%M:%S")
 {
     std::ostringstream oss;
@@ -86,42 +122,37 @@ std::string strfnowtime(std::string format="%Y-%m-%d %H:%M:%S")
 std::vector<char> readFileBytesData(const std::string& file_path, bool verbose) {
     std::vector<char> file_data;
     
-    // 以二进制模式打开文件
     std::ifstream file(file_path, std::ios::binary | std::ios::ate);
     
     if (!file.is_open()) {
-        std::cerr << "错误：无法打开文件 " << file_path << std::endl;
+        std::cerr << "ERROR: can not open file " << file_path << std::endl;
         return file_data;
     }
     
-    // 获取文件大小
     std::streamsize size = file.tellg();
     file.seekg(0, std::ios::beg);
     
-    // 检查文件大小是否合理
     if (size <= 0) {
-        std::cerr << "错误：文件大小无效或文件为空" << std::endl;
+        std::cerr << "ERROR: file size is invalid" << std::endl;
         return file_data;
     }
-    
-    // 预留空间以提高性能
     file_data.resize(size);
-    
-    // 读取整个文件到vector
     if (!file.read(file_data.data(), size)) {
-        std::cerr << "错误：读取文件失败" << std::endl;
+        std::cerr << "ERROR: failed to read file" << std::endl;
         file_data.clear();
         return file_data;
     }
     
-    if(verbose) std::cout << "成功读取文件，大小: " << size << " 字节" << std::endl;
+    if(verbose) std::cout << "file size: " << size << " bytes" << std::endl;
     return file_data;
 }
 
-// 构造函数
 FlaskCpp::FlaskCpp(std::string server_name, size_t minThreads, size_t maxThreads)
 :running(false), threadPool(minThreads, maxThreads), server_name(server_name)
 {
+#ifdef _WIN32
+    initSocketWindows();
+#endif
     verbose = verbose_default;
     if (flask_first && verbose)
     {
@@ -133,10 +164,13 @@ FlaskCpp::FlaskCpp(std::string server_name, size_t minThreads, size_t maxThreads
     }
 }
 
-// 构造函数
+
 FlaskCpp::FlaskCpp(int port, bool verbose, bool enableHotReload, size_t minThreads, size_t maxThreads) 
     : port(port), verbose(verbose), enableHotReload(enableHotReload), running(false), threadPool(minThreads, maxThreads) {
-    if (verbose) {
+#ifdef _WIN32
+    initSocketWindows();
+#endif
+        if (verbose) {
         if (flask_first)
         {
             flask_first = false;
@@ -168,15 +202,27 @@ void FlaskCpp::setConfigUpdateListener(const std::string& file_path, TemplateEng
 }
 
 
-void FlaskCpp::log(const flaskcpp::LogMsg& msg)
+std::string genLog(const flaskcpp::LogMsg& msg, bool colored=true, bool simple=false)
+{
+    std::string level = simple?"":((colored?log_colors[msg.level]:"") + log_levelnames[msg.level] + (colored?("\033[0m"):"") + " │ ");
+    std::string time = (colored?"[\033[32m":"[") + strfnowtime() + (colored?"\033[0m]":"]");
+    std::string message = (colored?log_colors[msg.level]:"") + msg.content + (colored?"\033[0m":"");
+    time.reserve(time.size() + level.size() + message.size() + 1);
+    time.append(" ");
+    time.append(level);
+    time.append(message);
+    return time;
+}
+
+void FlaskCpp::log(const flaskcpp::LogMsg& msg, bool simple)
 {
     if (logger)
     {
         logger(msg);
     }
     else if (verbose) {
-        std::cout << "[\033[32m" << strfnowtime() << "\033[0m] " 
-                  << msg.content << std::endl;
+        std::string level = simple?"":(log_colors[msg.level] + log_levelnames[msg.level] + "\033[0m │ ");
+        std::cout << genLog(msg, true, simple) << std::endl;
     }
 }
 
@@ -324,7 +370,6 @@ void FlaskCpp::loadTemplatesFromDirectory(const std::string& directoryPath)
                 std::string filename = entry.path().filename().string();
                 setTemplate(filename, content);
 
-                // 保存文件的时间戳
                 templatesTimestamps[entry.path().string()] = fs::last_write_time(entry);
 
                 if (logger)
@@ -365,7 +410,7 @@ void FlaskCpp::monitorTemplates() {
     namespace fs = std::filesystem;
 
     while (running.load()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(check_duration)); // 适中的检查间隔
+        std::this_thread::sleep_for(std::chrono::milliseconds(check_duration));
 
         templateEngine.checkConfigOnce();
         templateEngine.execAllCheckTask();
@@ -377,7 +422,6 @@ void FlaskCpp::monitorTemplates() {
                 std::string filePath = entry.path().string();
                 auto currentTimestamp = fs::last_write_time(entry);
 
-                // 如果文件已更改则重新启动
                 if (templatesTimestamps.find(filePath) != templatesTimestamps.end()) {
                     if (templatesTimestamps[filePath] != currentTimestamp) {
                         std::ifstream file(entry.path());
@@ -407,7 +451,6 @@ void FlaskCpp::monitorTemplates() {
                         }
                     }
                 } else {
-                    // 更新文件时间
                     templatesTimestamps[filePath] = currentTimestamp;
                 }
             }
@@ -430,7 +473,6 @@ void FlaskCpp::runAsync() {
 
     running.store(true);
 
-    // 仅在启用热重新加载时运行监视流
     if (enableHotReload) {
         hotReloadThread = std::thread(&FlaskCpp::monitorTemplates, this);
         if (logger)
@@ -456,8 +498,6 @@ void FlaskCpp::runAsync() {
         }
     }
 
-    // 将服务器启动任务添加到高优先级线程池
-    // 假设0是最高优先级
     threadPool.enqueue(0, [this](){
         this->run();
     });
@@ -466,8 +506,19 @@ void FlaskCpp::runAsync() {
 }
 
 void FlaskCpp::run() {
-    int serverSocket = socket(AF_INET6, SOCK_STREAM, 0);
-    if (serverSocket == -1) {
+#ifdef _WIN32
+    SOCKET 
+#else
+    int
+#endif
+    serverSocket = socket(AF_INET6, SOCK_STREAM, 0);
+    if (serverSocket == 
+#ifdef _WIN32
+        INVALID_SOCKET
+#else
+        -1
+#endif
+    ) {
         if (logger)
         {
             std::ostringstream oss;
@@ -481,9 +532,19 @@ void FlaskCpp::run() {
     }
 
     int opt = 0;
-    setsockopt(serverSocket, IPPROTO_IPV6, IPV6_V6ONLY, &opt, sizeof(opt));
+    setsockopt(serverSocket, IPPROTO_IPV6, IPV6_V6ONLY, 
+#ifdef _WIN32
+        (const char*)
+#endif
+        &opt, 
+        sizeof(opt));
     opt = 1;
-    setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, 
+#ifdef _WIN32
+        (const char*)
+#endif
+        &opt, 
+        sizeof(opt));
     
     sockaddr_in6 serverAddr = {};
     serverAddr.sin6_family = AF_INET6;
@@ -501,14 +562,19 @@ void FlaskCpp::run() {
         }
         else
             std::cerr << "[\033[32m" << strfnowtime() << "\033[0m] " << "Bind failed." << std::endl;
-        close(serverSocket);
+#ifdef _WIN32
+        closesocket
+#else
+        close
+#endif
+        (serverSocket);
         bind_success = false;
         // running.store(false);
         // stop();
         return;
     }
 
-    if (listen(serverSocket, 100) == -1) { // 增加Backlog以获得更大的负载
+    if (listen(serverSocket, 100) == -1) {
         if (logger)
         {
             std::ostringstream oss;
@@ -517,7 +583,12 @@ void FlaskCpp::run() {
         }
         else
             std::cerr << "[\033[32m" << strfnowtime() << "\033[0m] " << "Listen failed." << std::endl;
-        close(serverSocket);
+#ifdef _WIN32
+        closesocket
+#else
+        close
+#endif
+        (serverSocket);
         bind_success = false;
         // running.store(false);
         // stop();
@@ -547,12 +618,13 @@ void FlaskCpp::run() {
         std::cout << "[\033[32m" << strfnowtime() << "\033[0m] " << "Server is running on \033[32mhttp://0.0.0.0:" << port << "\033[0m" << std::endl;
     }
 
-    while (running.load()) {  // 支持服务器停止的循环
+    while (running.load()) {
         sockaddr_in6 clientAddr;
         socklen_t clientLen = sizeof(clientAddr);
+        // std::cout << "waiting for accept" << std::endl;
         int clientSocket = accept(serverSocket, (sockaddr*)&clientAddr, &clientLen);
         if (clientSocket == -1) {
-            if (running.load()) { // 检查服务器是否已停止
+            if (running.load()) {
                 if (logger)
                 {
                     std::ostringstream oss;
@@ -564,58 +636,78 @@ void FlaskCpp::run() {
             }
             continue;
         }
+        // std::cout << "accept done." << std::endl;
 
-        // 设置读取第一个数据块的超时（5秒）
         struct timeval timeout;
         timeout.tv_sec = 5;
         timeout.tv_usec = 0;
         setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
 
-        // 读取查询方法的前4096字节
-        char buffer[4096];
+        // read header
+        // ClientData client_data(clientSocket);
+        std::string requestSample; // = client_data.readHeader();
+
+        char buffer[256];
         ssize_t bytesRead = recv(clientSocket, buffer, sizeof(buffer), MSG_PEEK);
-        std::string requestSample;
         if (bytesRead > 0) {
             requestSample = std::string(buffer, bytesRead);
         }
 
-        // 从第一行提取查询方法
-        std::string method = "GET"; // 默认GET
+        std::string method = "GET";  // default
         size_t firstLineEnd = requestSample.find("\r\n");
+        std::string firstLine;
         if (firstLineEnd != std::string::npos) {
-            std::string firstLine = requestSample.substr(0, firstLineEnd);
-            std::istringstream iss(firstLine);
-            iss >> method;
+            firstLine = requestSample.substr(0, firstLineEnd);
         }
+        else firstLine = requestSample;
 
-        // 根据查询方法设置优先级
-        int priority = 5; // 默认平均优先级
+        std::istringstream iss(firstLine);
+        iss >> method;
+
+        int priority = 5;
         if (method == "GET") {
-            priority = 1; // Get高优先级
+            priority = 1;
         } else if (method == "POST") {
-            priority = 2; // Post平均优先级
-        } else if (method == "PUT" || method == "DELETE") {
-            priority = 3; // 低优先级的put和delete
+            priority = 2;
+        } else if (method == "PUT" || method == "DELETE" || method == "HEAD" || 
+                   method == "PATCH" || method == "OPTIONS" || method == "TRACE" || method == "CONNECT") {
+            priority = 3;
         } else {
-            priority = 4; // 其他方法的优先级非常低
+            // priority = 4;
+            // no response
+#ifdef _WIN32
+        closesocket
+#else
+        close
+#endif
+            (clientSocket);
+            continue;
         }
 
         // if (verbose) {
         //     std::cout << "Request Method: " << method << " - Assigned Priority: " << priority << std::endl;
         // }
 
+        // std::cout << "Request Method: " << method << " - Assigned Priority: " << priority << std::endl;
         char clientIP[INET6_ADDRSTRLEN];
         inet_ntop(AF_INET6, &clientAddr.sin6_addr, clientIP, INET6_ADDRSTRLEN);
 
-        bool fromIPV4 = stringStartsWith(clientIP, "::ffff:");
+        bool fromIPV6 = stringStartsWith(clientIP, "::ffff:");
 
-        // 将客户端处理添加到具有特定优先级的线程池
-        threadPool.enqueue(priority, [this, clientSocket, clientIP, fromIPV4]() {
-            this->handleClient(clientSocket, std::string(fromIPV4?clientIP+7:clientIP));
+        threadPool.enqueue(priority, [this, clientSocket, clientIP, fromIPV6]() {
+            // this->handleClient(clientSocket, std::string(fromIPV6?clientIP+7:clientIP));
+            // auto cdata = client_data;
+            this->handleClient2(clientSocket, std::string(fromIPV6?clientIP+7:clientIP));
         });
-    }
 
-    close(serverSocket);
+        // std::cout << "current threads: " << threadPool.getCurrentThreads() << std::endl;
+    }
+#ifdef _WIN32
+        closesocket
+#else
+        close
+#endif
+    (serverSocket);
 }
 
 void FlaskCpp::run(int port, bool verbose, bool enableHotReload)
@@ -623,6 +715,7 @@ void FlaskCpp::run(int port, bool verbose, bool enableHotReload)
     this->port = port;
     this->verbose= verbose;
     this->enableHotReload = enableHotReload;
+    this->running.store(true);
     this->run();
 }
 
@@ -651,32 +744,46 @@ void FlaskCpp::stop() {
     else if (verbose) std::cout << "[\033[32m" << strfnowtime() << "\033[0m] " << "(\033[36m" << server_name << "\033[0m) " 
     << "please wait for http server stop" << std::endl;
     
-    // std::cout << __LINE__ << std::endl;
+    // 
     running.store(false);
 
-    // std::cout << __LINE__ << std::endl;
-
-    // 创建与服务器套接字的连接以终止Accept锁
-    int dummySocket = socket(AF_INET, SOCK_STREAM, 0);
-    if(dummySocket != -1){
+    // 
+#ifdef _WIN32
+    SOCKET
+#else
+    int
+#endif
+    dummySocket = socket(AF_INET, SOCK_STREAM, 0);
+    if(dummySocket != 
+#ifdef _WIN32
+        INVALID_SOCKET
+#else
+        -1
+#endif
+    ){
         sockaddr_in serverAddr = {};
         serverAddr.sin_family = AF_INET;
         serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
         serverAddr.sin_port = htons(port);
         connect(dummySocket, (sockaddr*)&serverAddr, sizeof(serverAddr));
-        close(dummySocket);
+#ifdef _WIN32
+        closesocket
+#else
+        close
+#endif
+        (dummySocket);
     }
 
-    // std::cout << __LINE__ << std::endl;
+    // 
     // 停止线程池
     threadPool.shutdown();
-    // std::cout << __LINE__ << std::endl;
+    // 
     
     // 等待监控线程完成
     if (enableHotReload && hotReloadThread.joinable()) {
         hotReloadThread.join();
     }
-    // std::cout << __LINE__ << std::endl;
+    // 
     
 
     if (logger)
@@ -694,6 +801,10 @@ std::string FlaskCpp::renderTemplate(const std::string& templateName, const Temp
     return templateEngine.render(templateName, context);
 }
 
+std::string FlaskCpp::renderTemplateString(const std::string& template_content, const TemplateEngine::Context& context) {
+    return templateEngine.renderTemplateContent(template_content, context);
+}
+
 std::string FlaskCpp::jump_to(const std::string& route_, const std::string& msg, size_t delay)
 {
     std::string html_string = R"(<!DOCTYPE html>
@@ -704,7 +815,25 @@ std::string FlaskCpp::jump_to(const std::string& route_, const std::string& msg,
     </head>
     <body>
         <p>)" + msg + R"(</p>
-        wait for )" + std::to_string(delay) + R"(seconds.
+        wait for )" + std::to_string(delay) + R"( seconds.
+    </body>
+</html>)";
+    return html_string;
+}
+
+std::string FlaskCpp::jump2(const std::string& route_)
+{
+    std::string html_string = R"(<!DOCTYPE html>
+<html>
+    <head>
+        <title>redirect</title>
+    </head>
+    <body>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                window.location.href = ")" + route_ + R"(";
+            });
+        </script>
     </body>
 </html>)";
     return html_string;
@@ -910,15 +1039,398 @@ std::string FlaskCpp::deleteCookie(const std::string& name,
     return cookie.str();
 }
 
+
+inline bool isSocketConnected(int clientSocket) {
+    fd_set fds;
+    struct timeval tv;
+    FD_ZERO(&fds);
+    FD_SET(clientSocket, &fds);
+
+    tv.tv_sec = 0;
+    tv.tv_usec = 0;
+
+    int ret = select(clientSocket + 1, NULL, &fds, NULL, &tv);
+    if (ret == -1) {
+        return false;
+    } else if (ret == 0) {
+        return false;
+    } else {
+        return FD_ISSET(clientSocket, &fds);
+    }
+}
+
+void FlaskCpp::handleClient2(int clientSocket, const std::string& clientIP)
+{
+    // int clientSocket = client_data.getClientSocket();
+    ClientData client_data(clientSocket);
+    int status = 200;
+    std::string method="Unknown", path="Unknown";
+    try {
+        
+        RequestData reqData;
+        // std::string requestStr = readRequest(clientSocket);
+        // parseRequest(requestStr, reqData);
+        parseRequest2(client_data, reqData);
+
+
+        
+
+        reqData.path = url_decode(reqData.path);
+        // std::cout << __LINE__ << ". " << reqData.method << "," << reqData.path << std::endl;
+        
+        if (reqData.path[0] == '/')
+        {
+            method = reqData.method;
+            path = reqData.full_path;
+            // std::cout << "deal socket " << clientSocket << std::endl;
+        }
+        else
+        {
+            std::cout << "can not recognize, close socket " << clientSocket << std::endl;
+#ifdef _WIN32
+            closesocket(clientSocket);
+#else
+            close(clientSocket);
+#endif
+            return;
+        }
+        
+        
+
+
+        std::string response;
+        bool is_file=false;
+        flaskcpp::FileHandler fh;
+        flaskcpp::Response resp;
+
+        {
+            std::lock_guard<std::mutex> lock(routeMutex);
+
+            UniteHandler unite_handler = nullptr;
+            ComplexHandler handler = nullptr;
+            
+            auto uit = ROUTES.find(reqData.path);
+            if (uit != ROUTES.end())
+            {
+                unite_handler = uit->second;
+            }
+            else
+            {
+                for (auto &pr : paramROUTES) {
+                    if (matchParamRoute(reqData.path, pr.pattern, reqData.routeParams)) {
+                        unite_handler = pr.handler;
+                        break;
+                    }
+                }
+            }
+            
+            
+
+            if (unite_handler)
+            {
+                resp = unite_handler(reqData);
+                if (!resp.type)
+                {
+                    sendResponse(clientSocket, generate404Error("404 NOT FOUND"));
+                    status = 404;
+                }
+            }
+            else
+            {
+                auto it = routes.find(reqData.path);
+                if (it != routes.end()) {
+                    handler = it->second;
+                } else {
+                    for (auto &pr : paramRoutes) {
+                        if (matchParamRoute(reqData.path, pr.pattern, reqData.routeParams)) {
+                            handler = pr.handler;
+                            break;
+                        }
+                    }
+                }
+
+                if (!handler) {
+                    FlaskFileHandler fhandler = nullptr;
+                    auto it = file_routes.find(reqData.path);
+                    if (it != file_routes.end()) {
+                        fhandler = it->second;
+                        is_file = true;
+                        fhandler(reqData).copyTo(fh);
+                    }
+                    else if (!serveStaticFile(reqData, response)) {
+                        response = generate404Error();
+                        status = 404;
+                    }
+                } else {
+                    response = handler(reqData);
+                }
+            }
+        
+            
+
+        }
+        
+
+        if (resp.type)
+        {
+            // if (resp.type == flaskcpp::RESP_TYPE_NOT_FOUND)
+            // {
+            //     status = 404;
+            // }
+            // if (resp.type == flaskcpp::RESP_TYPE_INTERNAL_SERVER_ERROR)
+            // {
+            //     status = 500;
+            // }
+            if (resp.type >= 200)
+            {
+                status = resp.type;
+                if (resp.type >= 1000) status = 200;
+            }
+
+            
+            switch (resp.type)
+            {
+            case flaskcpp::RESP_TYPE_TEXT:
+            case flaskcpp::RESP_TYPE_JSON:
+                sendResponse(clientSocket, resp.text);
+                break;
+            case flaskcpp::RESP_TYPE_FILE:
+                {
+                    fh.init(resp.file_path, resp.file_name, resp.as_attachment);
+                }
+                break;
+            case flaskcpp::RESP_TYPE_FILE_BYTES:
+                {
+                    
+                    fh.init("", resp.file_name, resp.as_attachment);
+                    
+                    fh.setFileData(resp.file_data);
+                    
+                }
+                break;
+            default:
+                if (resp.type >= 100 && resp.type < 600)
+                {
+                    sendResponse(clientSocket, resp.text);
+                }
+                else
+                {
+                    sendResponse(clientSocket, generate404Error("404 NOT FOUND"));
+                }
+                
+                break;
+            }
+
+            
+
+
+            if (resp.type >= flaskcpp::RESP_TYPE_FILE)
+            {
+                // std::cout << __LINE__ << std::endl;
+                auto splitStr = [](const std::string&s, const char sig){
+                    std::vector<std::string> parts;
+                    std::istringstream iss(s);
+                    std::string p;
+                    while(std::getline(iss, p, sig)) {
+                        if (!p.empty()) parts.push_back(p);
+                    }
+                    return parts;
+                };
+                
+                // std::cout << __LINE__ << std::endl;
+                auto it = reqData.headers.find("Range");
+                
+                if (it != reqData.headers.end())
+                {
+                    auto range = splitStr(it->second, '-');
+                    if (range.size() >= 1)
+                    {
+                        fh.setStart(std::atoll(splitStr(range[0], '=')[1].c_str()));
+                        if (range.size() == 2)
+                        {
+                            if (range[1].size())
+                            {
+                                fh.setEnd(std::atoll(range[1].c_str()));
+                            }
+                        }
+                        status = 206;
+                    }
+                }
+                // std::cout << __LINE__ << std::endl;
+                
+                std::string header_str = fh.generateHeader(resp.extra_headers);
+
+                // std::cout << header_str << std::endl;
+                
+                if (!header_str.size() || !fh.isFileExist())
+                {
+                    sendResponse(clientSocket, generate500Error("file not found"));
+                }
+                else
+                {
+                    // std::cout << __LINE__ << std::endl;
+                    sendResponse(clientSocket, header_str);
+                    // std::cout << __LINE__ << std::endl;
+                    static std::vector<char> file_data_(8192);
+                    static std::vector<char> file_data_data_(10 * 1024 * 1024);
+                    size_t read_size=0;
+
+                    std::vector<char>& file_data = (resp.type == flaskcpp::RESP_TYPE_FILE)?file_data_:file_data_data_;
+                    
+                    // std::cout << header_str << std::endl;
+                    // int flags = fcntl(clientSocket, F_GETFL, 0);
+                    // fcntl(clientSocket, F_SETFL, flags | O_NONBLOCK);
+                    static struct timeval timeout;
+                    timeout.tv_sec = 1;
+                    timeout.tv_usec = 0;
+                    setsockopt(clientSocket, SOL_SOCKET, SO_SNDTIMEO, 
+#ifdef _WIN32
+                        (const char*)
+#endif
+                        &timeout, sizeof(timeout));
+
+
+                    while (read_size = fh.read(file_data))
+                    {
+                        std::cout << __LINE__ << std::endl;
+                        // if(!isSocketConnected(clientSocket)) break;
+                        if (send(clientSocket, file_data.data(), read_size, MSG_NOSIGNAL) <= 0)
+                        {
+                            break;
+                        }
+                        std::cout << __LINE__ << std::endl;
+                    }
+                    // std::cout << __LINE__ << std::endl;
+                }
+
+            }
+        
+            
+        }
+        else
+        {
+            if (is_file)
+            {
+
+                auto splitStr = [](const std::string&s, const char sig){
+                    std::vector<std::string> parts;
+                    std::istringstream iss(s);
+                    std::string p;
+                    while(std::getline(iss, p, sig)) {
+                        if (!p.empty()) parts.push_back(p);
+                    }
+                    return parts;
+                };
+                
+                auto it = reqData.headers.find("Range");
+                if (it != reqData.headers.end())
+                {
+                    // std::cout << it->second << std::endl;
+                    auto range = splitStr(it->second, '-');
+                    // std::cout << range.size() << std::endl;
+                    if (range.size() >= 1)
+                    {
+                        // std::cout << splitStr(range[0], '=')[1].c_str() << std::endl;
+                        // std::cout << "start: " << std::atoll(splitStr(range[0], '=')[1].c_str()) << " bytes" << std::endl;
+                        fh.setStart(std::atoll(splitStr(range[0], '=')[1].c_str()));
+                        // std::cout << "set start done" << std::endl;
+                        if (range.size() == 2)
+                        {
+                            if (range[1].size())
+                            {
+                                fh.setEnd(std::atoll(range[1].c_str()));
+                            }
+                        }
+                    }
+                }
+                
+                // std::cout << "gen header" << std::endl;
+                std::string header_str = fh.generateHeader();
+                if (!header_str.size() || !fh.isFileExist())
+                {
+                    sendResponse(clientSocket, generate404Error("file not found"));
+                    status = 404;
+                }
+                else
+                {
+                    sendResponse(clientSocket, header_str);
+                    std::vector<char> file_data(8192);
+                    size_t read_size=0;
+                    while (read_size = fh.read(file_data))
+                    {
+                        if (send(clientSocket, file_data.data(), read_size, MSG_NOSIGNAL) <= 0)
+                        {
+                            break;
+                        }
+                    }
+                }
+
+                
+                // sendResponse(clientSocket, )
+            }
+            else
+            {
+                sendResponse(clientSocket, response);
+            }
+        }
+        
+        
+
+#ifdef _WIN32
+        closesocket(clientSocket);
+#else
+        close(clientSocket);
+#endif
+    } catch (std::exception& e) {
+        std::string response = generate500Error(e.what());
+        sendResponse(clientSocket, response);
+        status = 500;
+#ifdef _WIN32
+        closesocket(clientSocket);
+#else
+        close(clientSocket);
+#endif
+    } catch (...) {
+        std::string response = generate500Error("Unknown error");
+        sendResponse(clientSocket, response);
+        status = 500;
+#ifdef _WIN32
+        closesocket(clientSocket);
+#else
+        close(clientSocket);
+#endif
+    }
+    
+
+    if (logger)
+    {
+        std::ostringstream oss;
+        oss << clientIP << " | " << method << " " << path << " -> " << status;
+        logger({1, oss.str(), __LINE__, __FILE__, __func__});
+    }
+    else if (verbose) {
+        std::cout << "[\033[32m" << strfnowtime() << "\033[0m] " 
+                << "\033[36m" << clientIP << "\033[0m | "
+                << "\033[34m\033[1m" << method << " \033[0m\033[35m" << path 
+                << "\033[0m -> \033[36m" << status << "\033[0m" << std::endl;
+    }
+}
+
 void FlaskCpp::handleClient(int clientSocket, const std::string& clientIP) {
     int status = 200;
     std::string method="Unknown", path="Unknown";
     try {
         // std::cout << 1 << std::endl;
-        std::string requestStr = readRequest(clientSocket);
-        // std::cout << 2 << std::endl;
         RequestData reqData;
-        parseRequest(requestStr, reqData);
+        // std::string requestStr = readRequest(clientSocket);
+        // parseRequest(requestStr, reqData);
+
+        ClientData client_data(clientSocket);
+        parseRequest2(client_data, reqData);
+
+
+        // std::cout << 2 << std::endl;
+
         reqData.path = url_decode(reqData.path);
         // std::cout << 3 << ". " << reqData.method << "," << reqData.path << std::endl;
         
@@ -944,7 +1456,6 @@ void FlaskCpp::handleClient(int clientSocket, const std::string& clientIP) {
             UniteHandler unite_handler = nullptr;
             ComplexHandler handler = nullptr;
             
-            // 试图找到准确的路线。
             auto uit = ROUTES.find(reqData.path);
             if (uit != ROUTES.end())
             {
@@ -970,14 +1481,13 @@ void FlaskCpp::handleClient(int clientSocket, const std::string& clientIP) {
                     status = 404;
                 }
             }
-            // 如果新接口没有匹配，尝试匹配老接口，不建议使用
+
             else
             {
                 auto it = routes.find(reqData.path);
                 if (it != routes.end()) {
                     handler = it->second;
                 } else {
-                    // 检查带有参数的路由
                     for (auto &pr : paramRoutes) {
                         if (matchParamRoute(reqData.path, pr.pattern, reqData.routeParams)) {
                             handler = pr.handler;
@@ -987,7 +1497,6 @@ void FlaskCpp::handleClient(int clientSocket, const std::string& clientIP) {
                 }
 
                 if (!handler) {
-                    // 寻找是否是本地文件
                     FlaskFileHandler fhandler = nullptr;
                     auto it = file_routes.find(reqData.path);
                     if (it != file_routes.end()) {
@@ -995,7 +1504,6 @@ void FlaskCpp::handleClient(int clientSocket, const std::string& clientIP) {
                         is_file = true;
                         fhandler(reqData).copyTo(fh);
                     }
-                    // 检查静态文件
                     else if (!serveStaticFile(reqData, response)) {
                         response = generate404Error();
                         status = 404;
@@ -1008,13 +1516,18 @@ void FlaskCpp::handleClient(int clientSocket, const std::string& clientIP) {
         
         if (resp.type)
         {
-            if (resp.type == flaskcpp::RESP_TYPE_NOT_FOUND)
+            // if (resp.type == flaskcpp::RESP_TYPE_NOT_FOUND)
+            // {
+            //     status = 404;
+            // }
+            // if (resp.type == flaskcpp::RESP_TYPE_INTERNAL_SERVER_ERROR)
+            // {
+            //     status = 500;
+            // }
+            if (resp.type >= 200)
             {
-                status = 404;
-            }
-            if (resp.type == flaskcpp::RESP_TYPE_INTERNAL_SERVER_ERROR)
-            {
-                status = 500;
+                status = resp.type;
+                if (resp.type >= 1000) status = 200;
             }
             switch (resp.type)
             {
@@ -1170,17 +1683,29 @@ void FlaskCpp::handleClient(int clientSocket, const std::string& clientIP) {
         }
         
         
+#ifdef _WIN32
+        closesocket(clientSocket);
+#else
         close(clientSocket);
+#endif
     } catch (std::exception& e) {
         std::string response = generate500Error(e.what());
         sendResponse(clientSocket, response);
         status = 500;
+#ifdef _WIN32
+        closesocket(clientSocket);
+#else
         close(clientSocket);
+#endif
     } catch (...) {
         std::string response = generate500Error("Unknown error");
         sendResponse(clientSocket, response);
         status = 500;
+#ifdef _WIN32
+        closesocket(clientSocket);
+#else
         close(clientSocket);
+#endif
     }
     if (logger)
     {
@@ -1196,11 +1721,11 @@ void FlaskCpp::handleClient(int clientSocket, const std::string& clientIP) {
     }
 }
 
+
 std::string FlaskCpp::readRequest(int clientSocket) {
     std::string request;
     char buffer[4096];
     ssize_t bytesRead;
-    // 阅读标题
     while ((bytesRead = recv(clientSocket, buffer, sizeof(buffer), MSG_PEEK)) > 0) {
         std::string temp(buffer, bytesRead);
         size_t pos = temp.find("\r\n\r\n");
@@ -1214,7 +1739,6 @@ std::string FlaskCpp::readRequest(int clientSocket) {
         }
     }
 
-    // 检查读取主体的内容长度
     std::string headers = request;
     size_t bodyPos = headers.find("\r\n\r\n");
     int contentLength = 0;
@@ -1248,19 +1772,19 @@ std::string FlaskCpp::readRequest(int clientSocket) {
 }
 
 
-std::vector<std::string> stringSplit(std::string str_, std::string delimiter) {
-    if (str_.empty()) return {""};
-    std::vector<std::string> tokens;
-    size_t pos = 0;
-    std::string::size_type prev_pos = 0;
-    while ((pos = str_.find(delimiter, prev_pos)) != std::string::npos) {
-        tokens.push_back(str_.substr(prev_pos, pos - prev_pos));
-        prev_pos = pos + delimiter.length();
-    }
-    if (prev_pos < str_.length()) tokens.push_back(str_.substr(prev_pos));
-    if (stringEndsWith(str_, delimiter)) tokens.push_back("");
-    return tokens;
-}
+// std::vector<std::string> stringSplit(std::string str_, std::string delimiter) {
+//     if (str_.empty()) return {""};
+//     std::vector<std::string> tokens;
+//     size_t pos = 0;
+//     std::string::size_type prev_pos = 0;
+//     while ((pos = str_.find(delimiter, prev_pos)) != std::string::npos) {
+//         tokens.push_back(str_.substr(prev_pos, pos - prev_pos));
+//         prev_pos = pos + delimiter.length();
+//     }
+//     if (prev_pos < str_.length()) tokens.push_back(str_.substr(prev_pos));
+//     if (stringEndsWith(str_, delimiter)) tokens.push_back("");
+//     return tokens;
+// }
 
 
 static inline std::string parse_file(std::string body, RequestData& req)
@@ -1301,56 +1825,195 @@ static inline std::string parse_file(std::string body, RequestData& req)
 
     if (end_loc == body.npos) return body;
 
-    std::string content = body.substr(loc+line_loc+1, end_loc-4);
+    std::string contents = body.substr(loc+line_loc+1, end_loc-4);
     std::string rest = body.substr(0, loc) + body.substr(loc+line_loc+1+end_loc+head.size()+2);
 
-    size_t disp_loc = content.find("Content-Disposition: ");
-    if (disp_loc == content.npos) return body;
-
-    size_t disp_loc_end = content.find("\r\n");
-    if (disp_loc_end == content.npos) return body;
-
-    RequestData::File f;
-    for(auto& p: stringSplit(content.substr(disp_loc + 21, disp_loc_end - disp_loc - 21), "; "))
-    {
-        // std::cout << p << std::endl;
-        if (stringStartsWith(p, "name=\""))
-        {
-            f.name = p.substr(6, p.size()-7);
-        }
-        else if (stringStartsWith(p, "filename=\""))
-        {
-            f.file_name = p.substr(10, p.size()-11);
-            // std::cout << f.file_name << std::endl;
-        }
-    }
-
-    if (strcmp(f.name.c_str(), "file") != 0)   // 如果不是文件，递归后续字符串
-    {
-        return recursive?(head + "\r\n" + content + "\r\n\r\n" + end + "\r\n" + parse_file(rest, req)):body;
-    }
     
-    size_t type_loc = content.find("Content-Type: ", disp_loc_end);
-    if (type_loc != content.npos) 
+
+    // std::cout << contents << std::endl;
+
+    // std::cout << head << std::endl;
+
+    for (auto content: stringSplit(contents, "\r\n--" + head + "\r\n"))
     {
-        size_t type_loc_end = content.find("\r\n", type_loc);
-        f.type = content.substr(type_loc + 14, type_loc_end - type_loc - 14);
+        size_t disp_loc = content.find("Content-Disposition: ");
+        if (disp_loc == content.npos) continue;
+
+        size_t disp_loc_end = content.find("\r\n");
+        if (disp_loc_end == content.npos) continue;
+
+        // std::cout << disp_loc << ", " << disp_loc_end << std::endl;
+        RequestData::File f;
+        // std::cout << content.substr(disp_loc + 21, disp_loc_end - disp_loc) << std::endl;
+        for(auto& p: stringSplit(content.substr(disp_loc + 21, disp_loc_end - disp_loc - 21), "; "))
+        {
+            // std::cout << p << std::endl;
+            if (stringStartsWith(p, "name=\""))
+            {
+                f.name = p.substr(6, p.size()-7);
+            }
+            else if (stringStartsWith(p, "filename=\""))
+            {
+                f.file_name = p.substr(10, p.size()-11);
+                // std::cout << f.file_name << std::endl;
+            }
+        }
+
+        // std::cout << "CONTENT:\n" << content << std::endl;
+
+        // req.formData
+
+        // if (strcmp(f.name.c_str(), "file") != 0)
+        // {
+        //     return recursive?(head + "\r\n" + content + "\r\n\r\n" + end + "\r\n" + parse_file(rest, req)):body;
+        // }
+        
+        size_t type_loc = content.find("Content-Type: ", disp_loc_end);
+        if (type_loc != content.npos) 
+        {
+            size_t type_loc_end = content.find("\r\n", type_loc);
+            f.type = content.substr(type_loc + 14, type_loc_end - type_loc - 14);
+        }
+        else 
+        {
+            type_loc = disp_loc_end;
+        }
+        size_t f_data_start = content.find("\r\n\r\n", type_loc);
+
+        std::string fdata = content.substr(f_data_start+4);
+
+        if (f.file_name.empty())
+        {
+            req.formData[f.name] = fdata;
+            // std::cout << f.name << ": " << fdata << std::endl;
+        }
+        else if (req.files.find(f.file_name) == req.files.end())
+        {
+            f.data.resize(fdata.size());
+            memcpy(f.data.data(), fdata.data(), f.data.size());
+            // size_t type_loc_end = content.find
+            req.files[f.file_name] = std::move(f);
+
+            
+        }
+        else
+        {
+            req.files[f.file_name].name = f.name;
+            req.files[f.file_name].file_name = f.file_name;
+            req.files[f.file_name].type = f.type;
+            req.files[f.file_name].data.resize(fdata.size());
+            memcpy(req.files[f.file_name].data.data(), fdata.data(), req.files[f.file_name].data.size());
+        }
+        
+        // std::cout << fdata << std::endl;
+        // std::cout << "content:-----------\n" << content  << "\nrest--------------\n" << rest << "\nend:-------------" << std::endl;
     }
-    size_t f_data_start = content.find("\r\n\r\n", type_loc);
-
-    std::string fdata = content.substr(f_data_start+4);
-
-    f.data.resize(fdata.size());
-    memcpy(f.data.data(), fdata.data(), f.data.size());
-    // size_t type_loc_end = content.find
-    req.files[f.file_name] = std::move(f);
-
-    
-    // std::cout << fdata << std::endl;
-    // std::cout << "content:-----------\n" << content  << "\nrest--------------\n" << rest << "\nend:-------------" << std::endl;
-
     return recursive?parse_file(rest, req):rest;
 }
+
+
+void FlaskCpp::parseRequest2(ClientData& client_data, RequestData& reqData)
+{
+    std::string header = client_data.readHeader();
+    std::istringstream stream(header);
+    std::string firstLine;
+    std::getline(stream, firstLine);
+    firstLine.erase(std::remove(firstLine.begin(), firstLine.end(), '\r'), firstLine.end());
+    {
+        std::istringstream fls(firstLine);
+        fls >> reqData.method;
+        std::string fullPath;
+        fls >> fullPath;
+    }
+
+    // std::cout << header << std::endl;
+
+    // Headers
+    std::string line;
+    while (std::getline(stream, line)) {
+        line.erase(std::remove(line.begin(), line.end(), '\r'), line.end());
+        if (line.empty()) break;
+        size_t colonPos = line.find(':');
+        if (colonPos != std::string::npos) {
+            std::string key = line.substr(0, colonPos);
+            std::string val = line.substr(colonPos+1);
+            while(!val.empty() && isspace((unsigned char)val.front())) val.erase(val.begin());
+            reqData.headers[key] = val;
+        }
+    }
+
+    {
+        std::istringstream fls(firstLine);
+        std::string tmp, fullPath;
+        fls >> tmp >> fullPath;
+        size_t questionMarkPos = fullPath.find('?');
+        reqData.full_path = fullPath;
+        if (questionMarkPos != std::string::npos) {
+            reqData.path = fullPath.substr(0, questionMarkPos);
+            std::string queryString = fullPath.substr(questionMarkPos + 1);
+            parseQueryString(queryString, reqData.queryParams);
+        } else {
+            reqData.path = fullPath;
+        }
+    }
+
+
+    bool is_form = client_data.isFormData();
+    if (!is_form)
+    {
+        client_data.readBodyString(reqData.body);
+        if (reqData.method == "POST") {
+            auto ctypeIt = reqData.headers.find("Content-Type");
+            if (ctypeIt != reqData.headers.end() && ctypeIt->second.find("application/x-www-form-urlencoded") != std::string::npos) {
+                parseQueryString(reqData.body, reqData.formData);
+            }
+        }
+
+        auto cookieIt = reqData.headers.find("Cookie");
+        if (cookieIt != reqData.headers.end()) {
+            parseCookies(cookieIt->second, reqData.cookies);
+            if (reqData.cookies.find("session") != reqData.cookies.end())
+            {
+                serialzer.str2map(serialzer.loads(reqData.cookies["session"]), reqData.session);
+            }
+        }
+
+        if (reqData.headers.find("Content-Type") != reqData.headers.end())
+        {
+            // json
+            std::string content_type = reqData.headers.at("Content-Type");
+            reqData.content_type = getContentTypeByString(content_type);
+            if (reqData.content_type == FLASK_FILE_APP_JSON)
+            {
+                reqData.json.clear();
+                try {
+                    reqData.json = nlohmann::json::parse(reqData.body);
+                } catch (const nlohmann::json::parse_error& e) {
+                    std::cerr << "failed to parse JSON: " << e.what() << std::endl;
+                }
+            }
+        }
+
+        reqData.acceptForm = [](){};
+    }
+    else
+    {
+        // RequestData::File f;
+        reqData.__client_data = &client_data;
+        reqData.isFromData = true;
+        reqData.acceptForm = [&]() {
+            std::string body;
+            if (reqData.headers.find("Expect") != reqData.headers.end())
+            {
+                if (reqData.headers.at("Expect") == "100-continue")
+                    sendResponse(client_data.getClientSocket(), "HTTP/1.1 100 Continue\r\n\r\n");
+            }
+            client_data.readBodyString(body);
+            parse_file(body, reqData);
+        };
+    }
+}
+
 
 void FlaskCpp::parseRequest(const std::string& request, RequestData& reqData) {
     // std::cout << request.substr(0, 2000) << std::endl;
@@ -1363,7 +2026,6 @@ void FlaskCpp::parseRequest(const std::string& request, RequestData& reqData) {
         fls >> reqData.method;
         std::string fullPath;
         fls >> fullPath;
-        // HTTP版本不能详细处理
     }
 
     // Headers
@@ -1380,9 +2042,8 @@ void FlaskCpp::parseRequest(const std::string& request, RequestData& reqData) {
         }
     }
 
-    
+    bool is_file = isFormReq(reqData);
 
-    // 余数 - 主体
     {
         std::string all = request;
         size_t bodyPos = all.find("\r\n\r\n");
@@ -1418,7 +2079,6 @@ void FlaskCpp::parseRequest(const std::string& request, RequestData& reqData) {
         }
     }
 
-    // 解析查询字符串
     {
         std::istringstream fls(firstLine);
         std::string tmp, fullPath;
@@ -1434,7 +2094,6 @@ void FlaskCpp::parseRequest(const std::string& request, RequestData& reqData) {
         }
     }
 
-    // 如果POST请求且Content-Type为application/x-www-form-urlencoded，则解析formData
     if (reqData.method == "POST") {
         auto ctypeIt = reqData.headers.find("Content-Type");
         if (ctypeIt != reqData.headers.end() && ctypeIt->second.find("application/x-www-form-urlencoded") != std::string::npos) {
@@ -1442,7 +2101,6 @@ void FlaskCpp::parseRequest(const std::string& request, RequestData& reqData) {
         }
     }
 
-    // 解析Cookies
     auto cookieIt = reqData.headers.find("Cookie");
     if (cookieIt != reqData.headers.end()) {
         parseCookies(cookieIt->second, reqData.cookies);
@@ -1481,7 +2139,6 @@ void FlaskCpp::parseQueryString(const std::string& queryString, std::map<std::st
 }
 
 bool FlaskCpp::matchParamRoute(const std::string& path, const std::string& pattern, std::map<std::string,std::string>& routeParams) {
-    // 将path和pattern按'/'拆分
     auto splitPath = [](const std::string&s){
         std::vector<std::string> parts;
         std::istringstream iss(s);
@@ -1537,7 +2194,6 @@ bool FlaskCpp::serveStaticFile(const RequestData& reqData, std::string& response
             std::string ext = filePath.extension().string();
 #ifdef ENABLE_PHP
             if(ext == ".php"){
-                // 通过php-cgi支持PHP
                 std::string phpOutput = executePHP(reqData, filePath);
                 response = phpOutput;
                 return true;
@@ -1575,6 +2231,7 @@ bool FlaskCpp::serveStaticFile(const RequestData& reqData, std::string& response
 
 void FlaskCpp::sendResponse(int clientSocket, const std::string& content) {
     send(clientSocket, content.c_str(), content.size(), MSG_NOSIGNAL);
+    // std::cout << content << std::endl;
 }
 
 std::string FlaskCpp::generate404Error(const std::string& msg, bool gen_header) {
@@ -1771,7 +2428,7 @@ std::string FlaskCpp::generate500Error(const std::string& msg, bool gen_header) 
     return response.str();
 }
 
-// 解析Cookie的实现
+
 void FlaskCpp::parseCookies(const std::string& cookieHeader, std::map<std::string, std::string>& cookies) {
     std::istringstream stream(cookieHeader);
     std::string pair;
@@ -1781,7 +2438,6 @@ void FlaskCpp::parseCookies(const std::string& cookieHeader, std::map<std::strin
         if (equalPos != std::string::npos) {
             std::string key = pair.substr(0, equalPos);
             std::string value = pair.substr(equalPos + 1);
-            // 删除键开头的空格
             key.erase(0, key.find_first_not_of(' '));
             cookies[key] = urlDecode(value);
         }
@@ -1789,7 +2445,7 @@ void FlaskCpp::parseCookies(const std::string& cookieHeader, std::map<std::strin
 
 }
 
-// urlDecode 的实现
+
 std::string FlaskCpp::urlDecode(const std::string &value) {
     std::string result;
     result.reserve(value.size());
@@ -1809,18 +2465,18 @@ std::string FlaskCpp::urlDecode(const std::string &value) {
 }
 
 #ifdef ENABLE_PHP
-// 通过php-cgi使用popen实现executePHP
+
 std::string FlaskCpp::executePHP(const RequestData& reqData, const std::filesystem::path& scriptPath) {
-    // 用于执行php-cgi的命令
+
     std::string command = "php-cgi " + scriptPath.string();
 
-    // 打开进程以读取PHP脚本的输出
+
     FILE* pipe = popen(command.c_str(), "r");
     if (!pipe) {
         return generate500Error("Failed to execute PHP script");
     }
 
-    // 读取PHP脚本的输出
+
     std::string phpOutput;
     char buffer[4096];
     while (fgets(buffer, sizeof(buffer), pipe)) {
@@ -1832,19 +2488,16 @@ std::string FlaskCpp::executePHP(const RequestData& reqData, const std::filesyst
         return generate500Error("PHP script execution failed");
     }
 
-    // 检查PHP输出是否以“Status:”开始
-    // 如果是，则提取状态并从输出中删除
-    std::string statusLine = "HTTP/1.1 200 OK\r\n"; // 默认
+    std::string statusLine = "HTTP/1.1 200 OK\r\n";
     size_t statusPos = phpOutput.find("Status:");
     if(statusPos != std::string::npos){
         size_t endLine = phpOutput.find("\r\n", statusPos);
         if(endLine != std::string::npos){
             statusLine = phpOutput.substr(statusPos, endLine - statusPos) + "\r\n";
-            phpOutput.erase(statusPos, endLine - statusPos + 2); // 从输出中删除状态行
+            phpOutput.erase(statusPos, endLine - statusPos + 2);
         }
     }
 
-    // 形成最终答复
     std::string finalResponse = statusLine + phpOutput;
     return finalResponse;
 }

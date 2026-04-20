@@ -4,6 +4,16 @@
 #include <fstream>
 #include <cstring>
 
+#ifdef _WIN32
+#include <direct.h>
+#ifndef S_ISDIR
+#define S_ISDIR(mode) (((mode) & _S_IFMT) == _S_IFDIR)
+#endif
+#ifndef S_ISREG
+#define S_ISREG(mode) (((mode) & _S_IFMT) == _S_IFREG)
+#endif
+#endif
+
 namespace flaskcpp
 {
 
@@ -74,11 +84,11 @@ bool FileHandler::isFileExist()
     if (!file_data.empty()) return true;
     struct stat info;
     if (stat(path.c_str(), &info) != 0) {
-        return false; // 目录不存在
+        return false;
     } else if (info.st_mode & S_IFDIR) {
-        return false; // 目录存在
+        return false;
     } else {
-        return true; // 路径存在但不是目录
+        return true;
     }
 }
 
@@ -265,22 +275,22 @@ static inline bool isdir(std::string path)
 {
     struct stat info;
     if (stat(path.c_str(), &info) != 0) {
-        return false; // 目录不存在
+        return false;
     } else if (info.st_mode & S_IFDIR) {
-        return true; // 目录存在
+        return true;
     } else {
-        return false; // 路径存在但不是目录
+        return false;
     }
 }
 
 static inline bool isfile(std::string path) {
     struct stat info;
     if (stat(path.c_str(), &info) != 0) {
-        return false; // 目录不存在
+        return false;
     } else if (info.st_mode & S_IFDIR) {
-        return false; // 目录存在
+        return false;
     } else {
-        return true; // 路径存在但不是目录
+        return true;
     }
 }
 
@@ -288,7 +298,6 @@ static inline bool create_directory_recursive(const std::string& path, bool is_p
     std::string current_path;
     std::vector<std::string> dirs;
     
-    // 分割路径
     size_t pos = 0;
     while (pos < path.length()) {
         size_t found = path.find('/', pos);
@@ -300,7 +309,6 @@ static inline bool create_directory_recursive(const std::string& path, bool is_p
         pos = found + 1;
     }
     
-    // 逐级创建目录
     int count = 0;
     for (const auto& dir : dirs) {
         if (is_path_file && ++count == dirs.size()) break;
@@ -308,7 +316,6 @@ static inline bool create_directory_recursive(const std::string& path, bool is_p
         
         current_path += dir + "/";
         
-        // 检查目录是否已存在
         struct stat st;
         if (stat(current_path.c_str(), &st) == 0) {
             if (!S_ISDIR(st.st_mode)) {
@@ -316,8 +323,13 @@ static inline bool create_directory_recursive(const std::string& path, bool is_p
                 return false;
             }
         } else {
-            // 创建目录
-            if (mkdir(current_path.c_str(), 0755) != 0) {
+            if (
+#ifdef _WIN32
+                _mkdir(current_path.c_str())
+#else
+                mkdir(current_path.c_str(), 0755) 
+#endif
+                != 0) {
                 std::cerr << "Error: Failed to create directory " << current_path << std::endl;
                 return false;
             }

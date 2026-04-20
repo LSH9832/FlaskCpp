@@ -4,26 +4,6 @@
 #include <string>
 // #include <
 
-std::string stringLower(std::string src)
-{
-    std::string ret = "";
-    for (int i=0;i<src.length();i++) {
-        int assic = src[i];
-        if (assic < 91 && assic > 64) {
-            ret += (char)(assic + 32);
-        }
-        else ret += src[i];
-    }
-    return ret;
-}
-
-bool stringEndswith(std::string src, const std::string& suffix) {
-    size_t str_len = src.length();
-    size_t suffix_len = suffix.length();
-    if (suffix_len > str_len) return false;
-    return (src.find(suffix, str_len - suffix_len) == (str_len - suffix_len));
-}
-
 
 std::pair<std::string, std::string> genFileExtraSettings(std::string fileName, bool as_attachment)
 {
@@ -38,83 +18,83 @@ std::string getFileTypeString(int type, std::string file_name)
     if (type<0)
     {
         std::string lower = stringLower(file_name);
-        if (stringEndswith(file_name, ".json"))
+        if (stringEndsWith(file_name, ".json"))
         {
             type = FLASK_FILE_APP_JSON;
         }
-        else if (stringEndswith(file_name, ".jpg") || stringEndswith(file_name, ".jpeg"))
+        else if (stringEndsWith(file_name, ".jpg") || stringEndsWith(file_name, ".jpeg"))
         {
             type = FLASK_FILE_JPEG;
         }
-        else if (stringEndswith(file_name, "png"))
+        else if (stringEndsWith(file_name, "png"))
         {
             type = FLASK_FILE_PNG;
         }
-        else if (stringEndswith(file_name, ".gif"))
+        else if (stringEndsWith(file_name, ".gif"))
         {
             type = FLASK_FILE_GIF;
         }
-        else if (stringEndswith(file_name, ".webp"))
+        else if (stringEndsWith(file_name, ".webp"))
         {
             type = FLASK_FILE_WEBP;
         }
-        else if (stringEndswith(file_name, ".pdf"))
+        else if (stringEndsWith(file_name, ".pdf"))
         {
             type = FLASK_FILE_PDF;
         }
-        else if (stringEndswith(file_name, ".doc") || stringEndswith(file_name, "docx"))
+        else if (stringEndsWith(file_name, ".doc") || stringEndsWith(file_name, "docx"))
         {
             type = FLASK_FILE_MSWORD;
         }
-        else if (stringEndswith(file_name, ".zip"))
+        else if (stringEndsWith(file_name, ".zip"))
         {
             type = FLASK_FILE_ZIP;
         }
-        else if (stringEndswith(file_name, ".bmp"))
+        else if (stringEndsWith(file_name, ".bmp"))
         {
             type = FLASK_FILE_BMP;
         }
-        else if (stringEndswith(file_name, ".mp4"))
+        else if (stringEndsWith(file_name, ".mp4"))
         {
             type = FLASK_FILE_MP4;
         }
-        else if (stringEndswith(file_name, ".mp3"))
+        else if (stringEndsWith(file_name, ".mp3"))
         {
             type = FLASK_FILE_MP3;
         }
-        else if (stringEndswith(file_name, ".wav"))
+        else if (stringEndsWith(file_name, ".wav"))
         {
             type = FLASK_FILE_WAV;
         }
-        else if (stringEndswith(file_name, ".ogg"))
+        else if (stringEndsWith(file_name, ".ogg"))
         {
             type = FLASK_FILE_AUDIO_OGG;  // 该格式不建议自动识别
         }
-        else if (stringEndswith(file_name, ".webm"))
+        else if (stringEndsWith(file_name, ".webm"))
         {
             type = FLASK_FILE_VIDEO_WEBM;   // 同上，不建议
         }
-        else if (stringEndswith(file_name, ".avi"))
+        else if (stringEndsWith(file_name, ".avi"))
         {
             type = FLASK_FILE_AVI;
         }
-        else if (stringEndswith(file_name, ".html"))
+        else if (stringEndsWith(file_name, ".html"))
         {
             type = FLASK_FILE_TEXT_HTML;
         }
-        else if (stringEndswith(file_name, ".css"))
+        else if (stringEndsWith(file_name, ".css"))
         {
             type = FLASK_FILE_TEXT_CSS;
         }
-        else if (stringEndswith(file_name, ".js"))
+        else if (stringEndsWith(file_name, ".js"))
         {
             type = FLASK_FILE_TEXT_JS;
         }
-        else if (stringEndswith(file_name, ".csv"))
+        else if (stringEndsWith(file_name, ".csv"))
         {
             type = FLASK_FILE_TEXT_CSV;
         }
-        else if (stringEndswith(file_name, ".xml"))
+        else if (stringEndsWith(file_name, ".xml"))
         {
             type = FLASK_FILE_TEXT_XML;
         }
@@ -140,4 +120,20 @@ int getContentTypeByString(const std::string& content_type)
         index++;
     }
     return 0;
+}
+
+
+bool isFormReq(RequestData& req)
+{
+    if (req.headers.find("Content-Type") != req.headers.end())
+    {
+        for(auto&line: stringSplit(req.headers.at("Content-Type"), "; "))
+        {
+            if (stringStartsWith(line, "boundary="))
+            {
+                return true;
+            }
+        }
+    }
+    return false;
 }
