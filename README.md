@@ -19,6 +19,9 @@ Thanks to original author of FlaskCpp [Andrew-Gomonov](https://github.com/Andrew
 ```shell
 mkdir build && cd build
 cmake ..
+# windows
+cmake --build . --config Release
+# linux
 make -j$(nproc)
 # then generate libFlaskCpp.so
 ```
