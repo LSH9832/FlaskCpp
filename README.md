@@ -5,6 +5,7 @@
 Thanks to original author of FlaskCpp [Andrew-Gomonov](https://github.com/Andrew-Gomonov)! The origin source code of this repository is [Andrew-Gomonov/FlaskCpp](https://github.com/Andrew-Gomonov/FlaskCpp), and I make it easier to use.
 
 ## 1. What's New?
+- **support run on Windows**.
 - [new function](/include/FlaskCpp/FlaskCpp.h#L57) for easier use (`void FlaskCpp::route2(std::string, std::function<flaskcpp::Response(const RequestData&)>)`)
 - support file [upload and download](/include/FlaskCpp/utils/file.h)
 - support [routeParam with "/"](/src/FlaskCpp.cpp#L1498)
