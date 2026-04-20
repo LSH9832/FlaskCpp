@@ -6,9 +6,9 @@ Thanks to original author of FlaskCpp [Andrew-Gomonov](https://github.com/Andrew
 
 ## 1. What's New?
 - **support run on Windows**.
-- [new function](/include/FlaskCpp/FlaskCpp.h#L57) for easier use (`void FlaskCpp::route2(std::string, std::function<flaskcpp::Response(const RequestData&)>)`)
+- [new function](/include/FlaskCpp/FlaskCpp.h#L65) for easier use (`void FlaskCpp::route2(std::string, std::function<flaskcpp::Response(const RequestData&)>)`)
 - support file [upload and download](/include/FlaskCpp/utils/file.h)
-- support [routeParam with "/"](/src/FlaskCpp.cpp#L1498)
+- support [routeParam with "/"](/src/FlaskCpp.cpp#L2155)
 - support custom [simple log system](/include/FlaskCpp/utils/log.h)
 - add session in RequestData
 - auto parse json by using [nlohmann/json](https://github.com/nlohmann/json)
