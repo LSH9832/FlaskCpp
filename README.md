@@ -2,7 +2,7 @@
 
 <div align="center">
 
-[English](/README-EN.md)
+[English](README-EN.md)
 
 </div>
 
