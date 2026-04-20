@@ -4,6 +4,9 @@
 [Chinese](README.md)
 
 </div>
+
+<img width="971" height="594" alt="image" src="https://github.com/user-attachments/assets/335b310d-afdb-497b-ba37-dbf5e80c512a" />
+
 ## 0. Thanks
 
 Thanks to original author of FlaskCpp [Andrew-Gomonov](https://github.com/Andrew-Gomonov)! The origin source code of this repository is [Andrew-Gomonov/FlaskCpp](https://github.com/Andrew-Gomonov/FlaskCpp), and I make it easier to use.
