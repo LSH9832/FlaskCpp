@@ -1,5 +1,9 @@
 # FlaskCpp: A Efficient & Extreme-Lightweight C++ Web Framework
+<div align="center">
 
+[Chinese](README.md)
+
+</div>
 ## 0. Thanks
 
 Thanks to original author of FlaskCpp [Andrew-Gomonov](https://github.com/Andrew-Gomonov)! The origin source code of this repository is [Andrew-Gomonov/FlaskCpp](https://github.com/Andrew-Gomonov/FlaskCpp), and I make it easier to use.
