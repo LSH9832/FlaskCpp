@@ -27,7 +27,10 @@ if(WIN32)
 target_link_libraries(FlaskCpp
     ws2_32
 )
+else()
+# linux demo
+add_subdirectory(${CMAKE_SOURCE_DIR}/src/demo)
 endif()
 
-add_subdirectory(${CMAKE_SOURCE_DIR}/src/demo)
+
 
